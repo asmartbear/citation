@@ -3,7 +3,7 @@ import type { MetadataResult } from 'metascraper';
 import metascraperAuthorJsonLd from './metascraper-ldjson';
 
 // Use require for metascraper to avoid the type conflict
-import metascraper from 'metascraper';
+const metascraper = require('metascraper');
 const metascraperAuthor = require('metascraper-author');
 const metascraperDate = require('metascraper-date');
 const metascraperDescription = require('metascraper-description');
@@ -28,8 +28,10 @@ const globalScraper = metascraper([
 /**
  * Parse data that has already been loaded.
  */
-export function parseUrlData(url: string, html: string): Promise<MetadataResult> {
-    return globalScraper({ html, url })
+export async function parseUrlData(url: string, html: string): Promise<MetadataResult> {
+    const result = await globalScraper({ html, url })
+    console.warn(result)
+    return result
 }
 
 /**
@@ -37,16 +39,19 @@ export function parseUrlData(url: string, html: string): Promise<MetadataResult>
  * The `url` field will be the result of any redirection.
  */
 export async function scrapeUrl(url: string): Promise<MetadataResult> {
+
+    // Fetch URL
     const response = await fetch(url, {
         headers: {
             'User-Agent': 'Mozilla/5.0 (compatible; CitationBot/1.0)'
         },
         timeout: 10000,
     });
-
     if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
+
+    // Parse and override result
     const result = await parseUrlData(url, await response.text())
     result.url = response.url           // in case of redirects
     return result

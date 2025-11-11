@@ -9,8 +9,11 @@ import { CitationMetadataInput, CitationMetadata, MetadataFetchResult, CSLDate, 
  * Fetch and enrich citation metadata from various sources
  * This function does all the heavy lifting: DOI lookups, web scraping, etc.
  * The result can be cached and reused.
+ * 
+ * @param input meta-data to decide how to fetch, and overrides for the result
+ * @param fStatus optional status-update callback function
  */
-export async function fetchCitationMetadata(input: CitationMetadataInput): Promise<MetadataFetchResult> {
+export async function fetchCitationMetadata(input: CitationMetadataInput, fStatus?: (msg: string) => unknown): Promise<MetadataFetchResult> {
     const warnings: string[] = [];
     let metadata: CitationMetadata = {
         type: 'article',
@@ -19,12 +22,13 @@ export async function fetchCitationMetadata(input: CitationMetadataInput): Promi
     };
     let source: 'doi' | 'isbn' | 'url' | 'manual' | 'mixed' = 'manual';
     let success = false;
+    if (!fStatus) fStatus = () => { }
 
     try {
         // Priority 1: Try DOI
         if (input.doi) {
             try {
-                console.log(`Fetching DOI: ${input.doi}`);
+                fStatus(`Fetching DOI: ${input.doi}`);
                 const cite = await Cite.async(input.doi);
                 const data = cite.data[0];
 
@@ -35,18 +39,18 @@ export async function fetchCitationMetadata(input: CitationMetadataInput): Promi
                 };
                 source = 'doi';
                 success = true;
-                console.log('✓ DOI metadata fetched successfully');
+                fStatus('✓ DOI metadata fetched successfully');
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
                 warnings.push(`DOI fetch failed: ${errorMessage}`);
-                console.warn(`✗ DOI fetch failed: ${errorMessage}`);
+                fStatus(`✗ DOI fetch failed: ${errorMessage}`);
             }
         }
 
         // Priority 2: Try ISBN
         if (!success && input.isbn) {
             try {
-                console.log(`Fetching ISBN: ${input.isbn}`);
+                fStatus(`Fetching ISBN: ${input.isbn}`);
                 const cite = await Cite.async(input.isbn);
                 const data = cite.data[0];
 
@@ -57,22 +61,22 @@ export async function fetchCitationMetadata(input: CitationMetadataInput): Promi
                 };
                 source = 'isbn';
                 success = true;
-                console.log('✓ ISBN metadata fetched successfully');
+                fStatus('✓ ISBN metadata fetched successfully');
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
                 warnings.push(`ISBN fetch failed: ${errorMessage}`);
-                console.warn(`✗ ISBN fetch failed: ${errorMessage}`);
+                fStatus(`✗ ISBN fetch failed: ${errorMessage}`);
             }
         }
 
         // Priority 3: Try URL scraping
         if (!success && input.url) {
             try {
-                console.log(`Scraping URL: ${input.url}`);
+                fStatus(`Scraping URL: ${input.url}`);
                 const scraped = await scrapeUrl(input.url)
                 const targetUrl = scraped.url ?? input.url; // Handle redirects
                 const now = new Date()
-                console.log('Scraped data:', scraped);
+                fStatus('Scraped data: ' + JSON.stringify(scraped));
 
                 // Convert to CSL format
                 const cslData: CitationMetadata = {
@@ -116,11 +120,11 @@ export async function fetchCitationMetadata(input: CitationMetadataInput): Promi
                 };
                 source = 'url';
                 success = true;
-                console.log('✓ URL metadata scraped successfully');
+                fStatus('✓ URL metadata scraped successfully');
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
                 warnings.push(`URL scraping failed: ${errorMessage}`);
-                console.warn(`✗ URL scraping failed: ${errorMessage}`);
+                fStatus(`✗ URL scraping failed: ${errorMessage}`);
             }
         }
 
@@ -169,7 +173,6 @@ export async function fetchCitationMetadata(input: CitationMetadataInput): Promi
 
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('Fatal error fetching metadata:', error);
 
         // Return what we have, even if incomplete
         return {
@@ -226,7 +229,6 @@ export function formatCitation(
 
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('Error formatting citation:', error);
         throw new Error(`Failed to format citation: ${errorMessage}`);
     }
 }

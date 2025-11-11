@@ -1,182 +1,96 @@
-// Simplified TypeScript version with minimal type dependencies
-// This version avoids Cheerio type conflicts
-
-import type { RuleBundle } from 'metascraper';
-
-// We use require to avoid type issues with @metascraper/helpers
-const { $jsonld, toRule } = require('@metascraper/helpers');
-
-/**
- * Interface for Person/Organization schema in JSON-LD
- */
-interface JsonLdAuthor {
-    '@type'?: string | string[];
-    name?: string;
-    givenName?: string;
-    familyName?: string;
-    alternateName?: string;
-    '@id'?: string;
-}
-
-/**
- * Interface for JSON-LD objects that might contain author information
- */
-interface JsonLdContent {
-    '@context'?: string | object;
-    '@type'?: string | string[];
-    author?: string | JsonLdAuthor | Array<string | JsonLdAuthor>;
-    creator?: string | JsonLdAuthor | Array<string | JsonLdAuthor>;
-    contributor?: string | JsonLdAuthor | Array<string | JsonLdAuthor>;
-    [key: string]: any;
-}
-
-/**
- * Extracts author name from various JSON-LD format structures
- * @param authorData - The author data from JSON-LD (can be string, object, or array)
- * @returns The extracted author name(s) or null
- */
-export function extractAuthorName(authorData: any): string | null {
+// metascraper-ldjson.ts
+function extractAuthorName(authorData: any): string | null {
     if (!authorData) return null;
+    if (typeof authorData === 'string') return authorData.trim();
 
-    // Handle string author
-    if (typeof authorData === 'string') {
-        return authorData.trim();
-    }
-
-    // Handle array of authors
     if (Array.isArray(authorData)) {
-        const authors = authorData
-            .map(author => extractAuthorName(author))
-            .filter(Boolean) as string[];
-        return authors.length > 0 ? authors.join(', ') : null;
+        const authors = authorData.map(extractAuthorName).filter(Boolean) as string[];
+        return authors.length ? authors.join(', ') : null;
     }
 
-    // Handle object author (Person or Organization schema)
     if (typeof authorData === 'object') {
-        // Try different name properties in order of preference
-        if (authorData.name) {
-            return authorData.name.trim();
-        }
-
-        // Handle separated first/last name
-        if (authorData.givenName && authorData.familyName) {
+        if (authorData.name) return String(authorData.name).trim();
+        if (authorData.givenName && authorData.familyName)
             return `${authorData.givenName} ${authorData.familyName}`.trim();
-        }
-
-        // Fallback options
-        if (authorData.alternateName) {
-            return authorData.alternateName.trim();
-        }
-
-        // If it's just an @id reference without a name, skip it
-        return null;
+        if (authorData.alternateName) return String(authorData.alternateName).trim();
     }
-
     return null;
 }
 
-/**
- * Content types that typically have authors in JSON-LD
- */
-const AUTHOR_CONTENT_TYPES = [
-    'Article',
-    'NewsArticle',
-    'BlogPosting',
-    'ScholarlyArticle',
-    'TechArticle',
-    'Report',
-    'Book',
-    'Review',
-    'CreativeWork',
-    'WebPage',
-    'VideoObject',
-    'Course',
-    'Dataset',
-    'SoftwareSourceCode',
-    'WebSite',
-    'MediaObject'
-];
+const stripHtmlComments = (s: string) => s.replace(/^\s*<!--|-->\s*$/g, '').trim();
+const safeParse = (s: string) => { try { return JSON.parse(stripHtmlComments(s)); } catch { return null; } };
+const asArray = <T>(v: T | T[] | null | undefined) => (Array.isArray(v) ? v : v != null ? [v] : []);
+const getTypes = (node: any): string[] => asArray(node?.['@type']).map(String);
 
-/**
- * Checks if a JSON-LD type indicates content that might have an author
- */
-function isAuthorContentType(types: string[]): boolean {
-    return types.some((type: string) =>
-        AUTHOR_CONTENT_TYPES.some(contentType =>
-            type === contentType ||
-            type.includes(`:${contentType}`) || // Handle schema.org prefixes
-            type.endsWith(`/${contentType}`) // Handle full URLs
-        )
-    );
-}
+const extractJsonLdNodes = (htmlDom: any): any[] => {
+    const nodes: any[] = [];
+    htmlDom('script[type="application/ld+json"]').each((_: number, el: any) => {
+        const raw = htmlDom(el).contents().text();
+        const data = safeParse(raw);
+        if (!data) return;
 
-/**
- * Metascraper rule for extracting authors from JSON-LD structured data.
- * This rule checks for authors in application/ld+json script tags.
- * 
- * @returns A RuleBundle with author extraction logic
- * 
- * @example
- * ```typescript
- * import metascraper from 'metascraper';
- * import metascraperAuthor from 'metascraper-author';
- * import { metascraperAuthorJsonLd } from './metascraper-author-jsonld';
- * 
- * const scraper = metascraper([
- *   metascraperAuthorJsonLd(),  // Check JSON-LD first
- *   metascraperAuthor(),         // Fallback to meta tags
- * ]);
- * 
- * const metadata = await scraper({ html, url });
- * console.log(metadata.author); // "Jane Doe, John Smith"
- * ```
- */
-export function metascraperAuthorJsonLd(): RuleBundle {
+        const pushNode = (n: any) => {
+            if (!n || typeof n !== 'object') return;
+            if (Array.isArray(n['@graph'])) nodes.push(...n['@graph']);
+            else nodes.push(n);
+        };
+
+        if (Array.isArray(data)) data.forEach(pushNode);
+        else pushNode(data);
+    });
+    return nodes;
+};
+
+function metascraperAuthorJsonLd() {
     return {
         author: [
-            toRule(({ htmlDom }: { htmlDom: any }) => {
-                try {
-                    // Extract JSON-LD data from the HTML
-                    const jsonld = $jsonld(htmlDom);
+            ({ htmlDom }: any): string | null => {
+                // quick sanity log you can delete
+                // console.error('metascraperAuthorJsonLd running; htmlDom type:', typeof htmlDom);
 
-                    if (!jsonld) return null;
+                const nodes = extractJsonLdNodes(htmlDom);
+                if (!nodes.length) return null;
 
-                    // Handle both single object and array of JSON-LD objects
-                    const jsonldArray: JsonLdContent[] = Array.isArray(jsonld) ? jsonld : [jsonld];
+                const contentTypes = new Set([
+                    'Article', 'NewsArticle', 'BlogPosting', 'ScholarlyArticle', 'TechArticle',
+                    'Report', 'Book', 'Review', 'CreativeWork', 'WebPage', 'VideoObject', 'Course'
+                ]);
 
-                    // Iterate through all JSON-LD objects looking for author information
-                    for (const obj of jsonldArray) {
-                        // Skip if no @type is specified
-                        if (!obj['@type']) continue;
+                // Pass 1: CreativeWork/WebPage-like nodes
+                for (const node of nodes) {
+                    const types = getTypes(node);
+                    const isContent = types.some(t => [...contentTypes].some(ct => t.includes(ct)));
+                    if (!isContent) continue;
 
-                        // Normalize @type to array for consistent handling
-                        const types = Array.isArray(obj['@type']) ? obj['@type'] : [obj['@type']];
+                    const authorData =
+                        node.author ??
+                        node.creator ??
+                        node.contributor ??
+                        node.reviewedBy ??
+                        node.editor ??
+                        node.publisher?.author;
 
-                        // Check if this is a content type that typically has authors
-                        if (!isAuthorContentType(types)) continue;
+                    const a1 = extractAuthorName(authorData);
+                    if (a1) return a1;
 
-                        // Try to find author in various properties (in order of preference)
-                        const authorData = obj.author || obj.creator || obj.contributor;
-
-                        if (authorData) {
-                            const extractedAuthor = extractAuthorName(authorData);
-                            if (extractedAuthor) {
-                                return extractedAuthor;
-                            }
-                        }
-                    }
-
-                    // No author found in JSON-LD
-                    return null;
-                } catch (error) {
-                    // Silently fail and let other rules handle it
-                    // This is important for the metascraper chain to continue
-                    return null;
+                    const a2 = extractAuthorName(node.mainEntity?.author ?? node.mainEntity?.creator);
+                    if (a2) return a2;
                 }
-            })
+
+                // Pass 2: standalone Person/Organization
+                for (const node of nodes) {
+                    const types = getTypes(node);
+                    if (types.includes('Person') || types.includes('Organization')) {
+                        const a = extractAuthorName(node);
+                        if (a) return a;
+                    }
+                }
+
+                return null;
+            }
         ]
     };
 }
 
-// Default export for convenience
 export default metascraperAuthorJsonLd;
+export { metascraperAuthorJsonLd, extractAuthorName };

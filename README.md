@@ -5,8 +5,9 @@ Creates formatting citations against URLs, DOI, ISBN, or manual fields.
 ## Usage
 
 ```typescript
-// Fetch meta-data information, loading from the internet from things like
-// DOI references, ISBN numbers, or meta-data from websites over URLs
+import { fetchCitationMetadata, formatCitation } from "@asmartbear/citation"
+// Fetch meta-data information, loading from the internet from
+// DOI references, ISBN numbers, or meta-data from websites over URLs.
 const meta = await fetchCitationMetadata({'isbn':'123456'})
 // Formatting a citation with options.
 console.log(formatCitation(meta,{format:'html'}))

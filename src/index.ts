@@ -17,7 +17,7 @@ if (require.main === module) {
         try {
             const result1 = await fetchCitationMetadata({
                 doi: '10.1145/3290605.3300536'
-            });
+            }, console.log);
             console.log('Success:', result1.success);
             console.log('Citation:', formatCitation(result1.metadata));
         } catch (error) {
@@ -31,7 +31,7 @@ if (require.main === module) {
         try {
             const result2 = await fetchCitationMetadata({
                 isbn: '9780316679077',
-            });
+            }, console.log);
             console.log('Citation:', formatCitation(result2.metadata));
         } catch (error) {
             console.error('Error:', error);
@@ -44,7 +44,7 @@ if (require.main === module) {
         try {
             const result3 = await fetchCitationMetadata({
                 url: 'https://en.wikipedia.org/wiki/Jason_Cohen_(entrepreneur)'
-            });
+            }, console.log);
             console.log('Citation:', formatCitation(result3.metadata));
         } catch (error) {
             console.error('Error:', error);
@@ -57,8 +57,20 @@ if (require.main === module) {
         try {
             const result4 = await fetchCitationMetadata({
                 url: 'https://www.youtube.com/watch?v=teq6CehQqOg',
-            });
+            }, console.log);
             console.log('Citation:', formatCitation(result4.metadata));
+        } catch (error) {
+            console.error('Error:', error);
+        }
+
+        // Example 5: asmartbear
+        console.log('5. asmartbear:');
+        console.log('─'.repeat(50));
+        try {
+            const result5 = await fetchCitationMetadata({
+                url: 'https://longform.asmartbear.com/product-market-fit-formula/',
+            }, console.log);
+            console.log('Citation:', formatCitation(result5.metadata));
         } catch (error) {
             console.error('Error:', error);
         }
