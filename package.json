@@ -1,6 +1,6 @@
 {
   "name": "@asmartbear/citation",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Parsing and loading citations",
   "keywords": [
     "status",
