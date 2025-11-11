@@ -28,10 +28,8 @@ const globalScraper = metascraper([
 /**
  * Parse data that has already been loaded.
  */
-export async function parseUrlData(url: string, html: string): Promise<MetadataResult> {
-    const result = await globalScraper({ html, url })
-    console.warn(result)
-    return result
+export function parseUrlData(url: string, html: string): Promise<MetadataResult> {
+    return globalScraper({ html, url })
 }
 
 /**

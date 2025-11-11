@@ -45,8 +45,6 @@ function metascraperAuthorJsonLd() {
     return {
         author: [
             ({ htmlDom }: any): string | null => {
-                // quick sanity log you can delete
-                // console.error('metascraperAuthorJsonLd running; htmlDom type:', typeof htmlDom);
 
                 const nodes = extractJsonLdNodes(htmlDom);
                 if (!nodes.length) return null;
